@@ -1,0 +1,125 @@
+using BepInEx;
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections.Generic;
+
+[BepInPlugin("com.yourname.mixedrealityselector", "Mixed Reality Webcam Selector", "1.0.0")]
+public class MixedRealityWebcamSelector : BaseUnityPlugin
+{
+    private WebCamTexture webcamTexture;
+    private GameObject webcamDisplay;
+    private List<string> webcamNames;
+    private int selectedWebcamIndex = -1;
+
+    private GameObject dropdownCanvas;
+    private Dropdown webcamDropdown;
+
+    void Start()
+    {
+        Logger.LogInfo("Mixed Reality Webcam Selector Loaded");
+
+        // Get available webcams
+        webcamNames = new List<string>();
+        foreach (var device in WebCamTexture.devices)
+        {
+            webcamNames.Add(device.name);
+        }
+
+        // Create dropdown UI for webcam selection
+        CreateDropdownUI();
+
+        // Create display for webcam feed
+        CreateWebcamDisplay();
+    }
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Y)) // Toggle webcam display on/off
+        {
+            webcamDisplay.SetActive(!webcamDisplay.activeSelf);
+        }
+    }
+
+    private void CreateDropdownUI()
+    {
+        dropdownCanvas = new GameObject("DropdownCanvas");
+        Canvas canvas = dropdownCanvas.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+
+        RectTransform canvasTransform = canvas.GetComponent<RectTransform>();
+        canvasTransform.sizeDelta = new Vector2(300, 100);
+        canvasTransform.position = Camera.main.transform.position + Camera.main.transform.forward * 1.5f;
+        canvasTransform.LookAt(Camera.main.transform);
+
+        // Add Dropdown
+        GameObject dropdownObj = new GameObject("WebcamDropdown");
+        dropdownObj.transform.SetParent(dropdownCanvas.transform);
+        webcamDropdown = dropdownObj.AddComponent<Dropdown>();
+        webcamDropdown.options = webcamNames.ConvertAll(name => new Dropdown.OptionData(name));
+        webcamDropdown.onValueChanged.AddListener(OnWebcamSelected);
+
+        RectTransform dropdownTransform = dropdownObj.GetComponent<RectTransform>();
+        dropdownTransform.sizeDelta = new Vector2(300, 30);
+        dropdownTransform.anchoredPosition = new Vector2(0, 0);
+
+        Logger.LogInfo("Dropdown for webcam selection created");
+    }
+
+    private void OnWebcamSelected(int index)
+    {
+        if (index != selectedWebcamIndex)
+        {
+            selectedWebcamIndex = index;
+            StartWebcamFeed(webcamNames[index]);
+        }
+    }
+
+    private void StartWebcamFeed(string deviceName)
+    {
+        // Stop current webcam if already running
+        if (webcamTexture != null)
+        {
+            webcamTexture.Stop();
+            Destroy(webcamTexture);
+        }
+
+        // Start new webcam feed
+        webcamTexture = new WebCamTexture(deviceName);
+        webcamTexture.Play();
+
+        // Apply the texture to the webcam display
+        webcamDisplay.GetComponent<Renderer>().material.mainTexture = webcamTexture;
+
+        Logger.LogInfo($"Webcam started: {deviceName}");
+    }
+
+    private void CreateWebcamDisplay()
+    {
+        // Create a plane in VR space to display the webcam feed
+        webcamDisplay = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        webcamDisplay.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f); // Adjust size
+        webcamDisplay.transform.position = Camera.main.transform.position + Camera.main.transform.forward * 2f;
+        webcamDisplay.transform.LookAt(Camera.main.transform);
+        webcamDisplay.SetActive(false); // Start with display off
+
+        Material displayMaterial = new Material(Shader.Find("Standard"));
+        webcamDisplay.GetComponent<Renderer>().material = displayMaterial;
+
+        Logger.LogInfo("Webcam display created");
+    }
+
+    void OnDisable()
+    {
+        if (webcamTexture != null)
+        {
+            webcamTexture.Stop();
+            Destroy(webcamTexture);
+        }
+
+        if (dropdownCanvas != null)
+        {
+            Destroy(dropdownCanvas);
+        }
+    }
+}
+
